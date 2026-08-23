@@ -1,0 +1,40 @@
+name: Create v1.0.0 Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/USAGE.md'
+      - 'docs/RELEASE_v1.0.0.md'
+      - 'README.md'
+      - '.github/workflows/release-v1.0.0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag and GitHub Release if absent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git rev-parse 'refs/tags/v1.0.0' >/dev/null 2>&1 || gh release view v1.0.0 >/dev/null 2>&1; then
+            echo 'v1.0.0 already exists; no action required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a v1.0.0 -m 'Ehime AED Rescue Map v1.0.0'
+          git push origin v1.0.0
+          gh release create v1.0.0 \
+            --title 'Ehime AED Rescue Map v1.0.0' \
+            --notes-file docs/RELEASE_v1.0.0.md \
+            --verify-tag
