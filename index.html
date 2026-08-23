@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="松山市オープンデータを用いたAED短時間アクセス圏と次の1台の配置候補を可視化するPoC" />
-  <title>えひめAEDレスキューマップ | 4分圏カバレッジ</title>
+  <meta name="description" content="松山市の100m人口メッシュとOSM歩行ネットワークでAEDアクセスと次の1台を分析するオープンデータPoC" />
+  <title>えひめAEDレスキューマップ | 歩行ネットワーク4分圏</title>
   <link rel="preconnect" href="https://unpkg.com" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="assets/styles.css" />
@@ -12,19 +12,19 @@
 <body>
   <header class="hero">
     <div>
-      <p class="eyebrow">EHIME OPEN DATA PoC / 松山市</p>
+      <p class="eyebrow">EHIME OPEN DATA PoC / 松山市 / PRECISION MODEL v2</p>
       <h1>えひめAEDレスキューマップ</h1>
-      <p class="lead">AEDの場所を探す地図ではなく、<strong>AEDが届きにくい人口を探し、「次の1台」を考える地図</strong>です。</p>
+      <p class="lead">AEDの場所を探す地図ではなく、<strong>100m人口メッシュと実際の歩行道路網から、AEDが届きにくい人口と「次の1台」を分析する地図</strong>です。</p>
     </div>
-    <div class="hero-badge">PoC</div>
+    <div class="hero-badge">v2</div>
   </header>
 
   <main>
     <section class="controls panel" aria-label="分析条件">
       <div class="control-item">
-        <label for="radius">短時間アクセス圏（直線距離） <strong id="radiusLabel">300m</strong></label>
-        <input id="radius" type="range" min="150" max="600" step="50" value="300" />
-        <div class="hint">300mは「徒歩約4分相当」のPoC近似。救命行動の医学的基準を示すものではありません。</div>
+        <label for="radius">歩行ネットワーク距離 <strong id="radiusLabel">320m</strong></label>
+        <input id="radius" type="range" min="80" max="640" step="20" value="320" />
+        <div class="hint" id="walkMinutesHint">320mは歩行速度4.8km/hで片道4分相当。道路上の最短経路距離で判定します。</div>
       </div>
       <div class="control-item">
         <span class="label">利用可能性</span>
@@ -32,7 +32,7 @@
           <button id="modeAll" class="active" type="button">全AED</button>
           <button id="mode24" type="button">24時間利用可のみ</button>
         </div>
-        <div class="hint" id="aedModeHint">公開データ上の全AEDを対象</div>
+        <div class="hint" id="aedModeHint">公開データ上のAEDを歩行ネットワークへ接続して分析</div>
       </div>
       <div class="control-item action-box">
         <button id="optimizeButton" class="primary" type="button">次の1台を再計算</button>
@@ -42,8 +42,8 @@
 
     <section class="metrics" aria-label="主要指標">
       <article class="metric panel"><span>推計カバー率</span><strong id="coverageRate">--</strong><small id="coveragePopulation">--</small></article>
-      <article class="metric panel"><span>推計未カバー人口</span><strong id="uncoveredPopulation">--</strong><small>需要点プロキシによる推計</small></article>
-      <article class="metric panel"><span>75歳以上・未カバー</span><strong id="uncoveredSenior">--</strong><small>2026年4月人口</small></article>
+      <article class="metric panel"><span>推計未カバー人口</span><strong id="uncoveredPopulation">--</strong><small>2020簡易100m人口メッシュ</small></article>
+      <article class="metric panel"><span>75歳以上・未カバー</span><strong id="uncoveredSenior">--</strong><small>2020簡易100m人口メッシュ</small></article>
       <article class="metric panel highlight"><span>次の1台による改善</span><strong id="gainPopulation">--</strong><small id="gainDetail">--</small></article>
     </section>
 
@@ -51,16 +51,16 @@
       <div class="map-card panel">
         <div class="map-toolbar">
           <div>
-            <strong>短時間アクセス・需要点マップ</strong>
+            <strong>100m人口 × 歩行ネットワーク</strong>
             <span id="mapStatus">データ読込中…</span>
           </div>
           <div class="legend">
             <span><i class="dot aed"></i>AED</span>
-            <span><i class="dot uncovered"></i>未カバー需要点</span>
+            <span><i class="dot uncovered"></i>未カバー100mメッシュ</span>
             <span><i class="dot recommended"></i>推薦候補</span>
           </div>
         </div>
-        <div id="map" aria-label="AEDカバレッジ地図"></div>
+        <div id="map" aria-label="AED歩行ネットワークカバレッジ地図"></div>
       </div>
 
       <aside class="side-stack">
@@ -72,7 +72,7 @@
             <h3 id="recName"></h3>
             <p id="recAddress"></p>
             <dl>
-              <div><dt>地域</dt><dd id="recRegion"></dd></div>
+              <div><dt>候補種別</dt><dd id="recRegion"></dd></div>
               <div><dt>追加カバー人口</dt><dd id="recGain"></dd></div>
               <div><dt>75歳以上</dt><dd id="recGain75"></dd></div>
               <div><dt>既存AEDまで</dt><dd id="recNearest"></dd></div>
@@ -81,36 +81,37 @@
         </section>
 
         <section class="panel ranking">
-          <h2>未カバー人口 上位地域</h2>
+          <h2>未カバー人口 上位100mメッシュ</h2>
           <ol id="districtRanking"></ol>
         </section>
       </aside>
     </section>
 
     <section class="method panel">
-      <h2>このPoCの計算方法</h2>
+      <h2>Precision Model v2 の計算方法</h2>
       <div class="method-grid">
-        <div><b>1</b><strong>AED</strong><p>松山市公開CSVの緯度経度・利用可能日時を利用。</p></div>
-        <div><b>2</b><strong>人口需要点</strong><p>44地域の人口を、その地域に割り当てた公共施設位置へ均等配分する透明なプロキシモデル。</p></div>
-        <div><b>3</b><strong>カバレッジ</strong><p>需要点から対象AEDまでの直線距離が設定半径以内ならカバーと判定。</p></div>
-        <div><b>4</b><strong>次の1台</strong><p>既存AEDから50m以上離れた公共施設を候補に、未カバー人口の増分が最大の地点を総当たり。</p></div>
+        <div><b>1</b><strong>AED</strong><p>松山市公開CSVの位置・利用可能日時を使用し、各AEDを最寄りの歩行可能道路へ接続。</p></div>
+        <div><b>2</b><strong>100m人口</strong><p>令和2年国勢調査250m人口を建物面積等で100mへ按分した公開データを需要点として直接利用。75歳以上も同メッシュから集計。</p></div>
+        <div><b>3</b><strong>実歩行距離</strong><p>OpenStreetMapの歩行可能道路・歩道・小径をグラフ化し、メッシュ→道路のsnap距離＋道路最短距離＋道路→AEDのsnap距離で判定。</p></div>
+        <div><b>4</b><strong>次の1台</strong><p>松山市公共施設を配置候補とし、各候補から未カバー100mメッシュへの歩行最短距離を計算。追加カバー人口が最大の地点を選定。</p></div>
       </div>
-      <p class="caveat"><strong>重要:</strong> これは政策検討・データ活用のPoCです。道路ネットワーク、施設の実際の入館可否、時間帯別人口、AEDの稼働状況等は初版では考慮していません。救命時は119番通報・消防等の指示に従ってください。</p>
+      <p class="caveat"><strong>重要:</strong> 人口は2020年国勢調査ベースの簡易100m配分で、実際の100mセル人口そのものではありません。道路はOpenStreetMapのbuild時点スナップショットです。建物内部の移動、入口位置、階段・勾配、信号待ち、AEDの故障・持出可否等は考慮していません。「4分」は歩行速度4.8km/hで片道320mとした分析設定で、医学的な救命基準ではありません。</p>
     </section>
 
     <section class="sources panel">
       <h2>オープンデータ出典</h2>
       <ul>
-        <li>松山市「AED設置箇所一覧」（データ日: 2025-03-01、CC BY）</li>
-        <li>松山市「地域・年齢別人口（令和8年4月1日時点）」（2026-04-01、CC BY）</li>
-        <li>松山市「公共施設一覧」（データ最終更新: 2024-02-20、CC BY）</li>
+        <li>松山市「AED設置箇所一覧」（2025-03-01、CC BY）</li>
+        <li>GTFS・GISデータ提供サイト「令和2年簡易100mメッシュ人口」（令和2年国勢調査250m人口ベース、CC BY）</li>
+        <li>松山市「公共施設一覧」（2024-02-20、CC BY）</li>
+        <li>OpenStreetMap / Overpass API（歩行ネットワーク、ODbL 1.0）</li>
         <li>背景地図 © OpenStreetMap contributors</li>
       </ul>
-      <p>詳細なURL・取得方法・モデル定義はリポジトリのREADMEと <code>scripts/build_data.py</code> に固定しています。</p>
+      <p>原典URL、snap閾値、除外道路、計算上限等はREADMEと <code>scripts/</code> に固定しています。</p>
     </section>
   </main>
 
-  <footer>Ehime AED Rescue Map PoC — Open Data × Location Optimization</footer>
+  <footer>Ehime AED Rescue Map — 100m Population Mesh × OSM Walking Network</footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="assets/app.js"></script>

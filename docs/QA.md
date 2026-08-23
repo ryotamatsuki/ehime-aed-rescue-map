@@ -1,16 +1,26 @@
-# Initial live-data validation
+# QA — Precision Model v2
 
-This file records the acceptance gate for the first GitHub-hosted PoC release.
+Release gate for the 100m population × OSM walking-network model.
 
-The pull-request CI must execute the full pipeline against the official Matsuyama City open-data URLs and pass all of the following:
+## Required live-data checks
 
-- download AED, 2026-04-01 regional/age population, and public-facility CSVs;
-- fail on required-schema mismatch;
-- model all 44 population regions;
-- reconstruct total and 75+ population from demand-point weights within rounding tolerance;
-- keep every placement candidate at least 50 m from an existing AED;
-- confirm 24-hour-classified AEDs are a non-empty subset of all AEDs;
-- calculate 300 m coverage and a non-negative best incremental placement for both all-AED and 24-hour-only modes;
-- verify JavaScript syntax and deployable static-site files.
+1. Matsuyama AED CSV downloads and has valid coordinates.
+2. Matsuyama public-facility CSV downloads and has valid coordinates.
+3. `100m_mesh_pop2020_38201.zip` downloads and contains `Meshcode`, `PopT`, `Pop75over`.
+4. Tiled Overpass acquisition returns a non-trivial walking graph.
+5. At least one all-AED and one 24h AED are snapped to the graph.
+6. Positive-population 100m meshes exceed 1,000 and >90% of population is network-snapped.
+7. Candidate facilities exist after 50m existing-AED exclusion.
+8. Network distances, not Haversine distances, drive coverage and candidate gain.
+9. All-AED coverage is not lower than 24h-only coverage at the same threshold.
+10. UI JavaScript passes syntax validation.
 
-The analysis remains a PoC proxy model: regional population is distributed over public-facility anchors and coverage uses great-circle distance, not a pedestrian network isochrone.
+## Model truthfulness
+
+- Population: 2020 Census 250m population redistributed to simplified 100m cells; not actual 100m census tabulation.
+- No 2026 small-area spatial rescaling.
+- Walking network: OSM build-time snapshot via Overpass.
+- Distance: mesh snap + shortest road/path distance + AED/candidate snap.
+- `4 min`: 320m at 4.8 km/h, one-way analytical setting only.
+- Unsnapped population stays in the denominator and is never silently dropped.
+- Euclidean coverage circles are not rendered as network isochrones.

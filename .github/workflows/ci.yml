@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -10,7 +11,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -18,14 +19,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Download official Matsuyama open data and build analysis payload
+      - name: Build 100m population × OSM walking-network payload
         run: python scripts/update_data.py
 
-      - name: Unit tests
+      - name: Unit and data-contract tests
         run: python -m unittest discover -s tests -v
 
       - name: Analysis QA
-        run: python scripts/qa.py
+        run: python scripts/qa.py | tee qa.log
 
       - uses: actions/setup-node@v4
         with:
@@ -40,3 +41,12 @@ jobs:
           test -s assets/app.js
           test -s assets/styles.css
           test -s data/processed.json
+
+      - name: Save live-data QA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: precision-model-live-qa
+          path: |
+            data/processed.json
+            qa.log
+          retention-days: 14

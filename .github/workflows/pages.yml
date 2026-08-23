@@ -20,7 +20,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -28,8 +28,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Download official data and build payload
+      - name: Build 100m population × OSM walking-network payload
         run: python scripts/update_data.py
+
+      - name: Unit and data-contract tests
+        run: python -m unittest discover -s tests -v
 
       - name: Analysis QA before deployment
         run: python scripts/qa.py
